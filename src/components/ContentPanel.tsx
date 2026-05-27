@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { Page, Sticker, STICKER_COLORS } from '../types'
+import { Page, Sticker } from '../types'
 import StickerPopup from './StickerPopup'
 
 interface Popup {
