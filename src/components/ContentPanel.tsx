@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { Page, Sticker } from '../types'
+import { Page } from '../types'
 import StickerPopup from './StickerPopup'
 
 interface Popup {
@@ -8,11 +8,18 @@ interface Popup {
   text: string
 }
 
+interface StickerPartial {
+  text: string
+  pageIndex: number
+  color: string
+}
+
 interface Props {
   page: Page
+  pageIndex: number
   pageCount: number
   stickerCount: number
-  onAddSticker: (sticker: Omit<Sticker, 'id' | 'createdAt'>) => void
+  onAddSticker: (sticker: StickerPartial) => void
   onShowStickers: () => void
   onNext: () => void
   onPrev: () => void
@@ -22,6 +29,7 @@ interface Props {
 
 export default function ContentPanel({
   page,
+  pageIndex,
   pageCount,
   stickerCount,
   onAddSticker,
@@ -38,7 +46,7 @@ export default function ContentPanel({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
     setPopup(null)
-  }, [page.id])
+  }, [pageIndex])
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection()
@@ -66,12 +74,7 @@ export default function ContentPanel({
 
   const makeSticker = () => {
     if (!popup) return
-    onAddSticker({
-      text: popup.text,
-      pageId: page.id,
-      pageTitle: page.title,
-      color: nextColor,
-    })
+    onAddSticker({ text: popup.text, pageIndex, color: nextColor })
     setPopup(null)
     window.getSelection()?.removeAllRanges()
   }
@@ -109,29 +112,29 @@ export default function ContentPanel({
   return (
     <div className="content-panel">
       <div className="content-topbar">
-        <button className="topbar-back" onClick={onBack}>
-          ← New Book
+        <button type="button" className="topbar-back" onClick={onBack}>
+          ← Library
         </button>
         <div className="topbar-nav">
-          <button className="nav-btn" onClick={onPrev} disabled={page.index === 0}>
+          <button type="button" className="nav-btn" onClick={onPrev} disabled={pageIndex === 0}>
             ‹ Prev
           </button>
           <span className="nav-counter">
-            {page.index + 1} / {pageCount}
+            {pageIndex + 1} / {pageCount}
           </span>
-          <button className="nav-btn" onClick={onNext} disabled={page.index === pageCount - 1}>
+          <button type="button" className="nav-btn" onClick={onNext} disabled={pageIndex === pageCount - 1}>
             Next ›
           </button>
         </div>
-        <button className="topbar-stickers" onClick={onShowStickers}>
+        <button type="button" className="topbar-stickers" onClick={onShowStickers}>
           Stickers {stickerCount > 0 && <span className="sticker-badge">{stickerCount}</span>}
         </button>
       </div>
 
       <div className="content-body" ref={scrollRef} onMouseUp={handleMouseUp}>
-        <div className="content-question">{page.title}</div>
+        <div className="content-question">{page.question}</div>
         <div className="content-answer" ref={bodyRef}>
-          {renderBody(page.body)}
+          {renderBody(page.answer)}
         </div>
       </div>
 

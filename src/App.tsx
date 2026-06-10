@@ -1,35 +1,48 @@
 import { useState, useEffect } from 'react'
 import { Book } from './types'
-import { saveBook, loadBook, clearBook } from './utils/storage'
-import ImportScreen from './components/ImportScreen'
+import { db } from './db'
+import { migrateFromLocalStorage } from './utils/migrate'
+import LibraryView from './components/LibraryView'
 import BookView from './components/BookView'
 
+// Hash-based router: '#/' = library, '#/book/:id' = book view.
+// Two routes only — no external router dep needed.
+function useHash(): string {
+  const [hash, setHash] = useState(() => window.location.hash || '#/')
+  useEffect(() => {
+    const handler = () => setHash(window.location.hash || '#/')
+    window.addEventListener('hashchange', handler)
+    return () => window.removeEventListener('hashchange', handler)
+  }, [])
+  return hash
+}
+
 export default function App() {
+  const hash = useHash()
   const [book, setBook] = useState<Book | null>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const saved = loadBook()
-    if (saved) setBook(saved)
+    void migrateFromLocalStorage().then(() => setReady(true))
   }, [])
 
-  const handleBook = (b: Book) => {
-    saveBook(b)
-    setBook(b)
-  }
+  useEffect(() => {
+    if (!ready) return
+    if (!hash.startsWith('#/book/')) { setBook(null); return }
+    const bookId = decodeURIComponent(hash.slice('#/book/'.length))
+    db.books.get(bookId).then(async record => {
+      if (!record) { window.location.hash = '#/'; return }
+      const stickers = await db.stickers.where('bookId').equals(bookId).toArray()
+      setBook({ ...record, stickers })
+    })
+  }, [hash, ready])
 
-  const handleBack = () => {
-    const confirmed = book
-      ? window.confirm('Leave this book? Your stickers are saved and will reload next time.')
-      : true
-    if (confirmed) {
-      clearBook()
-      setBook(null)
-    }
-  }
+  if (!ready) return null
 
-  if (book) {
-    return <BookView book={book} onBack={handleBack} />
+  if (hash.startsWith('#/book/') && book) {
+    return <BookView book={book} onBack={() => { window.location.hash = '#/' }} />
   }
+  if (hash.startsWith('#/book/')) return null  // loading book
 
-  return <ImportScreen onBook={handleBook} />
+  return <LibraryView />
 }

@@ -1,15 +1,13 @@
 export interface Page {
-  id: string
-  title: string
-  body: string
-  index: number
+  question: string
+  answer: string
 }
 
 export interface Sticker {
   id: string
+  bookId: string
+  pageIndex: number
   text: string
-  pageId: string
-  pageTitle: string
   color: string
   createdAt: number
 }
@@ -17,9 +15,11 @@ export interface Sticker {
 export interface Book {
   id: string
   title: string
+  createdAt: number
+  importedAt: number
+  source: 'chatgpt' | 'claude' | 'paste'
   pages: Page[]
   stickers: Sticker[]
-  createdAt: number
 }
 
 export const STICKER_COLORS = [

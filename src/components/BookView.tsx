@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Book, Sticker, STICKER_COLORS } from '../types'
-import { saveBook } from '../utils/storage'
+import { db } from '../db'
 import RolodexSpine from './RolodexSpine'
 import ContentPanel from './ContentPanel'
 import StickerCollection from './StickerCollection'
@@ -15,23 +15,21 @@ export default function BookView({ book: initialBook, onBack }: Props) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [showStickers, setShowStickers] = useState(false)
 
-  const updateBook = (updated: Book) => {
-    setBook(updated)
-    saveBook(updated)
-  }
-
-  const addSticker = useCallback((partial: Omit<Sticker, 'id' | 'createdAt'>) => {
+  const addSticker = useCallback((partial: { text: string; pageIndex: number; color: string }) => {
     const sticker: Sticker = {
       ...partial,
       id: `sticker-${Date.now()}`,
+      bookId: book.id,
       createdAt: Date.now(),
     }
-    updateBook({ ...book, stickers: [...book.stickers, sticker] })
-  }, [book])
+    setBook(prev => ({ ...prev, stickers: [...prev.stickers, sticker] }))
+    void db.stickers.add(sticker)
+  }, [book.id])
 
   const removeSticker = useCallback((id: string) => {
-    updateBook({ ...book, stickers: book.stickers.filter(s => s.id !== id) })
-  }, [book])
+    setBook(prev => ({ ...prev, stickers: prev.stickers.filter(s => s.id !== id) }))
+    void db.stickers.delete(id)
+  }, [])
 
   const nextColor = STICKER_COLORS[book.stickers.length % STICKER_COLORS.length]
   const activePage = book.pages[activeIndex]
@@ -46,6 +44,7 @@ export default function BookView({ book: initialBook, onBack }: Props) {
 
       <ContentPanel
         page={activePage}
+        pageIndex={activeIndex}
         pageCount={book.pages.length}
         stickerCount={book.stickers.length}
         onAddSticker={addSticker}
@@ -59,6 +58,7 @@ export default function BookView({ book: initialBook, onBack }: Props) {
       {showStickers && (
         <StickerCollection
           stickers={book.stickers}
+          pages={book.pages}
           onRemove={removeSticker}
           onClose={() => setShowStickers(false)}
         />

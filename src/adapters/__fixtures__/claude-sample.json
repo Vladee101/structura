@@ -1,0 +1,46 @@
+[
+  {
+    "uuid": "claude-conv-fixture-1",
+    "name": "Rust Basics",
+    "created_at": "2024-01-15T10:00:00Z",
+    "updated_at": "2024-01-15T10:05:00Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-1",
+        "text": "What is Rust?",
+        "sender": "human",
+        "created_at": "2024-01-15T10:00:01Z"
+      },
+      {
+        "uuid": "msg-2",
+        "text": "Rust is a systems programming language focused on safety and performance.",
+        "sender": "assistant",
+        "created_at": "2024-01-15T10:00:02Z"
+      },
+      {
+        "uuid": "msg-3",
+        "text": "What makes it safe?",
+        "sender": "human",
+        "created_at": "2024-01-15T10:00:03Z"
+      },
+      {
+        "uuid": "msg-4",
+        "text": "The ownership system prevents data races and null pointer dereferences.",
+        "sender": "assistant",
+        "created_at": "2024-01-15T10:00:04Z"
+      },
+      {
+        "uuid": "msg-5",
+        "text": "Is it hard to learn?",
+        "sender": "human",
+        "created_at": "2024-01-15T10:00:05Z"
+      },
+      {
+        "uuid": "msg-6",
+        "text": "It has a steep learning curve but the compiler guides you.",
+        "sender": "assistant",
+        "created_at": "2024-01-15T10:00:06Z"
+      }
+    ]
+  }
+]

@@ -1,0 +1,83 @@
+[
+  {
+    "id": "conv-chatgpt-1",
+    "title": "TypeScript Basics",
+    "create_time": 1700000000,
+    "update_time": 1700000100,
+    "current_node": "node-a3",
+    "mapping": {
+      "node-system": {
+        "id": "node-system",
+        "message": {
+          "author": { "role": "system" },
+          "content": { "content_type": "text", "parts": [""] }
+        },
+        "parent": null,
+        "children": ["node-u1"]
+      },
+      "node-u1": {
+        "id": "node-u1",
+        "message": {
+          "author": { "role": "user" },
+          "content": { "content_type": "text", "parts": ["What is TypeScript?"] }
+        },
+        "parent": "node-system",
+        "children": ["node-a1-old", "node-a1"]
+      },
+      "node-a1-old": {
+        "id": "node-a1-old",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": { "content_type": "text", "parts": ["This is the old regenerated branch — should be excluded."] }
+        },
+        "parent": "node-u1",
+        "children": []
+      },
+      "node-a1": {
+        "id": "node-a1",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": { "content_type": "text", "parts": ["TypeScript is a typed superset of JavaScript."] }
+        },
+        "parent": "node-u1",
+        "children": ["node-u2"]
+      },
+      "node-u2": {
+        "id": "node-u2",
+        "message": {
+          "author": { "role": "user" },
+          "content": { "content_type": "text", "parts": ["Why use it?"] }
+        },
+        "parent": "node-a1",
+        "children": ["node-a2"]
+      },
+      "node-a2": {
+        "id": "node-a2",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": { "content_type": "text", "parts": ["It catches errors at compile time."] }
+        },
+        "parent": "node-u2",
+        "children": ["node-u3"]
+      },
+      "node-u3": {
+        "id": "node-u3",
+        "message": {
+          "author": { "role": "user" },
+          "content": { "content_type": "text", "parts": ["How do I start?"] }
+        },
+        "parent": "node-a2",
+        "children": ["node-a3"]
+      },
+      "node-a3": {
+        "id": "node-a3",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": { "content_type": "text", "parts": ["Run npm install -g typescript."] }
+        },
+        "parent": "node-u3",
+        "children": []
+      }
+    }
+  }
+]
