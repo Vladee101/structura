@@ -2,7 +2,7 @@ export interface ParsedConversation {
   id: string
   title: string
   createdAt: number
-  source: 'chatgpt' | 'claude' | 'paste'
+  source: 'chatgpt' | 'claude' | 'paste' | 'deepseek'
   pages: Page[]
 }
 

@@ -204,14 +204,8 @@ html, body, #root {
 .spine-tab {
   width: 100%;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 14px 10px 0;
-  background: none;
-  border: none;
+  align-items: stretch;
   border-left: 3px solid var(--tab-color);
-  cursor: pointer;
-  text-align: left;
   transition: background 0.1s;
   margin-bottom: 2px;
 }
@@ -224,6 +218,40 @@ html, body, #root {
   background: var(--content-bg);
   margin-right: -3px;
   border-radius: 4px 0 0 4px;
+}
+
+.spine-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0 10px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.spine-tab-delete {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 10px 0 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  align-self: center;
+}
+
+.spine-tab:hover .spine-tab-delete {
+  opacity: 1;
+}
+
+.spine-tab-delete:hover {
+  color: #e55;
 }
 
 .spine-tab--active .tab-index,
@@ -362,6 +390,12 @@ html, body, #root {
   scrollbar-color: #ccc transparent;
 }
 
+.content-question-wrap {
+  position: relative;
+  max-width: 720px;
+  margin-bottom: 32px;
+}
+
 .content-question {
   font-family: Georgia, serif;
   font-size: 1.5rem;
@@ -369,9 +403,48 @@ html, body, #root {
   color: #1a1a1a;
   line-height: 1.4;
   padding-bottom: 24px;
-  margin-bottom: 32px;
   border-bottom: 2px solid var(--accent);
-  max-width: 720px;
+}
+
+.content-question-rename {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.content-question-wrap:hover .content-question-rename {
+  opacity: 1;
+}
+
+.content-question-rename:hover {
+  color: var(--accent);
+}
+
+.content-question-input {
+  width: 100%;
+  font-family: Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #1a1a1a;
+  line-height: 1.4;
+  padding-bottom: 24px;
+  border: none;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
+  outline: none;
+  resize: none;
+  min-height: 4rem;
+  box-sizing: border-box;
 }
 
 .content-answer {
@@ -380,6 +453,7 @@ html, body, #root {
   color: #2a2a2a;
   line-height: 1.8;
   max-width: 720px;
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -788,12 +862,33 @@ html, body, #root {
   -webkit-box-orient: vertical;
 }
 
+.book-title-input {
+  flex: 1;
+  width: 100%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 4px 6px;
+  font-family: Georgia, serif;
+  font-size: 0.875rem;
+  color: #f0ece4;
+  outline: none;
+  line-height: 1.55;
+}
+
 .book-card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 14px;
   gap: 4px;
+}
+
+.book-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .book-card-meta {
@@ -804,21 +899,31 @@ html, body, #root {
   text-overflow: ellipsis;
 }
 
+.book-card-rename,
 .book-card-delete {
   background: none;
   border: none;
   color: #555;
-  font-size: 1.1rem;
   cursor: pointer;
   line-height: 1;
-  padding: 0 2px;
-  flex-shrink: 0;
+  padding: 2px;
   opacity: 0;
   transition: opacity 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
 }
 
+.book-card-delete {
+  font-size: 1.1rem;
+}
+
+.book-card:hover .book-card-rename,
 .book-card:hover .book-card-delete {
   opacity: 1;
+}
+
+.book-card-rename:hover {
+  color: var(--accent);
 }
 
 .book-card-delete:hover {
@@ -925,6 +1030,344 @@ html, body, #root {
 }
 
 .import-btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── Library Body (shelf rail + main) ─────────────────────── */
+
+.library-body {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* ─── Shelf Rail ────────────────────────────────────────────── */
+
+.shelf-rail {
+  width: 168px;
+  min-width: 168px;
+  background: #1a1a1d;
+  border-right: 1px solid #2a2a2e;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+  padding: 10px 0 16px;
+  flex-shrink: 0;
+}
+
+.shelf-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px 7px 12px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: #999;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  text-align: left;
+  width: 100%;
+  border-radius: 0;
+  transition: background 0.12s, color 0.12s;
+  position: relative;
+  min-width: 0;
+  outline: none;
+}
+
+.shelf-rail-item:hover {
+  background: rgba(255,255,255,0.06);
+  color: #ccc;
+}
+
+.shelf-rail-item--active {
+  background: rgba(201,145,58,0.15);
+  color: #f0ece4;
+}
+
+.shelf-rail-item--active .shelf-rail-name {
+  color: var(--accent);
+}
+
+.shelf-rail-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.shelf-rail-dot--all {
+  background: #666;
+}
+
+.shelf-rail-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.shelf-rail-count {
+  font-size: 0.65rem;
+  color: #555;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 4px;
+}
+
+.shelf-rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.shelf-rail-item:hover .shelf-rail-actions {
+  opacity: 1;
+}
+
+.shelf-rail-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 2px 3px;
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+  transition: color 0.12s;
+}
+
+.shelf-rail-btn:hover {
+  color: var(--accent);
+}
+
+.shelf-rail-btn--delete:hover {
+  color: #e55;
+}
+
+.shelf-rail-edit {
+  flex: 1;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-size: 0.75rem;
+  color: #f0ece4;
+  font-family: var(--font-ui);
+  outline: none;
+  min-width: 0;
+}
+
+.shelf-rail-divider {
+  height: 1px;
+  background: #2a2a2e;
+  margin: 6px 12px;
+  flex-shrink: 0;
+}
+
+.shelf-rail-new {
+  padding: 8px 12px 0;
+  flex-shrink: 0;
+}
+
+.shelf-rail-new-input {
+  width: 100%;
+}
+
+.shelf-rail-add {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  padding: 4px 0;
+  transition: color 0.12s;
+  text-align: left;
+}
+
+.shelf-rail-add:hover {
+  color: var(--accent);
+}
+
+/* ─── Shelf Popover ─────────────────────────────────────────── */
+
+.shelf-popover {
+  background: #1e1e22;
+  border: 1px solid #35353a;
+  border-radius: 8px;
+  min-width: 180px;
+  max-width: 220px;
+  padding: 6px 0 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  font-family: var(--font-ui);
+}
+
+.shelf-popover-header {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #666;
+  padding: 4px 12px 8px;
+  border-bottom: 1px solid #2e2e33;
+  margin-bottom: 4px;
+}
+
+.shelf-popover-empty {
+  font-size: 0.8125rem;
+  color: #666;
+  padding: 8px 12px;
+  font-style: italic;
+}
+
+.shelf-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.shelf-popover-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.shelf-popover-check {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.shelf-popover-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.shelf-popover-name {
+  font-size: 0.8125rem;
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-popover-new {
+  padding: 6px 12px 0;
+  border-top: 1px solid #2e2e33;
+  margin-top: 4px;
+}
+
+.shelf-popover-new-input {
+  width: 100%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  color: #f0ece4;
+  font-family: var(--font-ui);
+  outline: none;
+}
+
+.shelf-popover-new-input::placeholder {
+  color: #555;
+}
+
+.shelf-popover-add-btn {
+  background: none;
+  border: none;
+  color: #777;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  padding: 2px 0;
+  transition: color 0.12s;
+}
+
+.shelf-popover-add-btn:hover {
+  color: var(--accent);
+}
+
+/* ─── Book card: shelf icon button ──────────────────────────── */
+
+.book-card-shelf {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.book-card:hover .book-card-shelf {
+  opacity: 1;
+}
+
+.book-card-shelf:hover {
+  color: var(--accent);
+}
+
+/* ─── Export buttons ────────────────────────────────────────── */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-export-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-size: 0.8125rem;
+  color: #888;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.topbar-export-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.topbar-export-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.library-export-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-size: 0.875rem;
+  color: #777;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.library-export-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }

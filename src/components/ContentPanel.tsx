@@ -2,6 +2,13 @@ import { useRef, useState, useCallback, useEffect } from 'react'
 import { Page } from '../types'
 import StickerPopup from './StickerPopup'
 
+const PencilIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+    <path d="M9 1L11 3L3.5 10.5H1.5V8.5L9 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M7.5 2.5L9.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+)
+
 interface Popup {
   x: number
   y: number
@@ -21,9 +28,12 @@ interface Props {
   stickerCount: number
   onAddSticker: (sticker: StickerPartial) => void
   onShowStickers: () => void
+  onExportBook: () => void
+  onExportStickers: () => void
   onNext: () => void
   onPrev: () => void
   onBack: () => void
+  onRenameChapter: (newTitle: string) => void
   nextColor: string
 }
 
@@ -34,19 +44,38 @@ export default function ContentPanel({
   stickerCount,
   onAddSticker,
   onShowStickers,
+  onExportBook,
+  onExportStickers,
   onNext,
   onPrev,
   onBack,
+  onRenameChapter,
   nextColor,
 }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [popup, setPopup] = useState<Popup | null>(null)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [editValue, setEditValue] = useState('')
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
     setPopup(null)
+    setEditingTitle(false)
   }, [pageIndex])
+
+  const startRename = () => {
+    setEditValue(page.question)
+    setEditingTitle(true)
+  }
+
+  const commitRename = useCallback(() => {
+    const trimmed = editValue.trim()
+    if (trimmed && trimmed !== page.question) onRenameChapter(trimmed)
+    setEditingTitle(false)
+  }, [editValue, page.question, onRenameChapter])
+
+  const cancelRename = () => setEditingTitle(false)
 
   const handleMouseUp = useCallback(() => {
     const selection = window.getSelection()
@@ -126,13 +155,60 @@ export default function ContentPanel({
             Next ›
           </button>
         </div>
-        <button type="button" className="topbar-stickers" onClick={onShowStickers}>
-          Stickers {stickerCount > 0 && <span className="sticker-badge">{stickerCount}</span>}
-        </button>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className="topbar-export-btn"
+            onClick={onExportBook}
+            title="Download book as Markdown"
+          >
+            ↓ Book
+          </button>
+          <button
+            type="button"
+            className="topbar-export-btn"
+            onClick={onExportStickers}
+            disabled={stickerCount === 0}
+            title={stickerCount === 0 ? 'No stickers to export' : 'Download stickers as Markdown'}
+          >
+            ↓ Highlights
+          </button>
+          <button type="button" className="topbar-stickers" onClick={onShowStickers}>
+            Stickers {stickerCount > 0 && <span className="sticker-badge">{stickerCount}</span>}
+          </button>
+        </div>
       </div>
 
       <div className="content-body" ref={scrollRef} onMouseUp={handleMouseUp}>
-        <div className="content-question">{page.question}</div>
+        <div className="content-question-wrap">
+          {editingTitle ? (
+            <textarea
+              className="content-question-input"
+              aria-label="Chapter title"
+              value={editValue}
+              autoFocus
+              onChange={e => setEditValue(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitRename() }
+              }}
+            />
+          ) : (
+            <div className="content-question">{page.question}</div>
+          )}
+          {!editingTitle && (
+            <button
+              type="button"
+              className="content-question-rename"
+              onClick={startRename}
+              title="Rename chapter"
+              aria-label="Rename chapter"
+            >
+              <PencilIcon />
+            </button>
+          )}
+        </div>
         <div className="content-answer" ref={bodyRef}>
           {renderBody(page.answer)}
         </div>

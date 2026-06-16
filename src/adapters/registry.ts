@@ -2,9 +2,10 @@ import type { AdapterInput, ParsedConversation } from './types'
 import { AdapterError } from './types'
 import { chatgptExportAdapter } from './chatgptExport'
 import { claudeExportAdapter } from './claudeExport'
+import { deepseekExportAdapter } from './deepseekExport'
 import { pasteAdapter } from './paste'
 
-const adapters = [chatgptExportAdapter, claudeExportAdapter, pasteAdapter]
+const adapters = [chatgptExportAdapter, deepseekExportAdapter, claudeExportAdapter, pasteAdapter]
 
 export function parseInput(input: AdapterInput): ParsedConversation[] {
   const adapter = adapters.find(a => a.detect(input))

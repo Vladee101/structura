@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { chatgptExportAdapter, linearize, pairTurns } from '../chatgptExport'
+import { zipSync } from 'fflate'
+import { chatgptExportAdapter, linearize, pairTurns, parseZipBuffer } from '../chatgptExport'
 import { claudeExportAdapter } from '../claudeExport'
+import { deepseekExportAdapter } from '../deepseekExport'
 import { pasteAdapter } from '../paste'
 import { AdapterError } from '../types'
 import type { AdapterInput } from '../types'
@@ -255,5 +257,201 @@ describe('pasteAdapter', () => {
 
   it('returns empty array for empty text', () => {
     expect(pasteAdapter.parse(textInput(''))).toHaveLength(0)
+  })
+})
+
+// ── parseZipBuffer — manifest-driven and fallback ─────────────────────────────
+
+const enc = new TextEncoder()
+const CONV_A = { id: 'a', marker: 'conv-a' }
+const CONV_B = { id: 'b', marker: 'conv-b' }
+
+function makeManifest(version: number, files: string[]) {
+  return {
+    version,
+    manifest_file: 'export_manifest.json',
+    logical_files: {
+      'conversations.json': { files, shard_count: files.length, sharded: files.length > 1 },
+    },
+  }
+}
+
+describe('parseZipBuffer — manifest primary path', () => {
+  it('uses manifest array order, not alphabetical — shard 001 listed first comes out first', () => {
+    // Manifest lists 001 before 000; result must follow that order, not sort order.
+    const zip = zipSync({
+      'export_manifest.json': enc.encode(JSON.stringify(
+        makeManifest(1, ['conversations-001.json', 'conversations-000.json'])
+      )),
+      'conversations-000.json': enc.encode(JSON.stringify([CONV_B])),
+      'conversations-001.json': enc.encode(JSON.stringify([CONV_A])),
+    })
+    const { conversations, manifestVersion } = parseZipBuffer(zip)
+    expect(manifestVersion).toBe(1)
+    expect(conversations).toHaveLength(2)
+    expect((conversations[0] as typeof CONV_A).marker).toBe('conv-a') // 001 listed first
+    expect((conversations[1] as typeof CONV_B).marker).toBe('conv-b') // 000 listed second
+  })
+
+  it('ignores .dat and user.json entries not listed in manifest', () => {
+    const zip = zipSync({
+      'export_manifest.json': enc.encode(JSON.stringify(
+        makeManifest(1, ['conversations-000.json', 'conversations-001.json'])
+      )),
+      'conversations-000.json': enc.encode(JSON.stringify([CONV_A])),
+      'conversations-001.json': enc.encode(JSON.stringify([CONV_B])),
+      'user.json': enc.encode(JSON.stringify({ name: 'Test User' })),
+      'chat.dat': enc.encode('binary data'),
+    })
+    const { conversations, manifestVersion } = parseZipBuffer(zip)
+    expect(manifestVersion).toBe(1)
+    expect(conversations).toHaveLength(2)
+  })
+
+  it('manifest version 2 with unparseable conversations entry throws AdapterError mentioning version', () => {
+    const zip = zipSync({
+      'export_manifest.json': enc.encode(JSON.stringify(
+        makeManifest(2, []) // empty files array → treated as unparseable entry
+      )),
+    })
+    expect(() => parseZipBuffer(zip)).toThrow(AdapterError)
+    expect(() => parseZipBuffer(zip)).toThrow('manifest version 2')
+  })
+})
+
+describe('parseZipBuffer — fallback path', () => {
+  it('no manifest: falls back to filename pattern, sorted ascending', () => {
+    const zip = zipSync({
+      'conversations-000.json': enc.encode(JSON.stringify([CONV_A])),
+      'conversations-001.json': enc.encode(JSON.stringify([CONV_B])),
+    })
+    const { conversations, manifestVersion } = parseZipBuffer(zip)
+    expect(manifestVersion).toBeNull()
+    expect(conversations).toHaveLength(2)
+    expect((conversations[0] as typeof CONV_A).marker).toBe('conv-a') // 000 comes first alphabetically
+  })
+
+  it('manifest present but malformed JSON falls back to filename pattern', () => {
+    const zip = zipSync({
+      'export_manifest.json': enc.encode('this is not valid json {{{'),
+      'conversations-000.json': enc.encode(JSON.stringify([CONV_A])),
+    })
+    const { conversations, manifestVersion } = parseZipBuffer(zip)
+    expect(manifestVersion).toBeNull()
+    expect(conversations).toHaveLength(1)
+  })
+})
+
+// ── DeepSeek adapter ──────────────────────────────────────────────────────────
+
+function ds(id: string, parentId: string | null, childrenIds: string[], fragments: Array<{ type: string; content: string }>) {
+  return {
+    id,
+    parent: parentId,
+    children: childrenIds,
+    message: fragments.length === 0 && parentId === null
+      ? null  // root node
+      : { files: [], model: 'deepseek-chat', inserted_at: '2025-01-01T00:00:00.000000+00:00', fragments },
+  }
+}
+
+const DS_LINEAR_FIXTURE = [{
+  id: 'ds-conv-1',
+  title: 'Linear Test',
+  inserted_at: '2025-02-06T21:14:55.519000+08:00',
+  updated_at: '2025-02-06T21:15:10.000000+08:00',
+  mapping: {
+    root:    ds('root',    null,    ['node-u1'], []),
+    'node-u1': ds('node-u1', 'root',   ['node-a1'], [{ type: 'REQUEST',  content: 'What is DeepSeek?' }]),
+    'node-a1': ds('node-a1', 'node-u1', ['node-u2'], [
+      { type: 'SEARCH',   content: 'search traces' },
+      { type: 'THINK',    content: 'internal thinking' },
+      { type: 'RESPONSE', content: 'DeepSeek is an AI.' },
+    ]),
+    'node-u2': ds('node-u2', 'node-a1', ['node-empty'], [{ type: 'REQUEST', content: 'What can it do?' }]),
+    'node-empty': ds('node-empty', 'node-u2', ['node-think'], []),  // empty fragments — no role
+    'node-think': ds('node-think', 'node-empty', ['node-a2'], [{ type: 'THINK', content: 'more thinking' }]),
+    'node-a2': ds('node-a2', 'node-think', [], [{ type: 'RESPONSE', content: 'It can reason.' }]),
+  },
+}]
+
+const DS_BRANCH_FIXTURE = [{
+  id: 'ds-conv-branch',
+  title: 'Branch Test',
+  inserted_at: '2025-02-07T10:00:00.000000+00:00',
+  updated_at: '2025-02-07T10:00:05.000000+00:00',
+  mapping: {
+    root:      ds('root',      null,       ['node-u1'], []),
+    'node-u1': ds('node-u1',   'root',     ['node-a-old', 'node-a-new'], [{ type: 'REQUEST', content: 'Ask something' }]),
+    // Two children — adapter must pick the LAST (node-a-new)
+    'node-a-old': ds('node-a-old', 'node-u1', [], [{ type: 'RESPONSE', content: 'old answer — should be excluded' }]),
+    'node-a-new': ds('node-a-new', 'node-u1', [], [{ type: 'RESPONSE', content: 'new answer' }]),
+  },
+}]
+
+describe('deepseekExport — linearization and content', () => {
+  it('parses linear fixture into 2 pages', () => {
+    const result = deepseekExportAdapter.parse(fileInput(DS_LINEAR_FIXTURE))
+    expect(result).toHaveLength(1)
+    expect(result[0].pages).toHaveLength(2)
+    expect(result[0].source).toBe('deepseek')
+  })
+
+  it('strips SEARCH and THINK fragments — only RESPONSE appears', () => {
+    const [conv] = deepseekExportAdapter.parse(fileInput(DS_LINEAR_FIXTURE))
+    expect(conv.pages[0].question).toBe('What is DeepSeek?')
+    expect(conv.pages[0].answer).toBe('DeepSeek is an AI.')
+    expect(conv.pages[0].answer).not.toContain('search traces')
+    expect(conv.pages[0].answer).not.toContain('internal thinking')
+  })
+
+  it('empty-fragments and THINK-only nodes are dropped — no blank pages', () => {
+    const [conv] = deepseekExportAdapter.parse(fileInput(DS_LINEAR_FIXTURE))
+    expect(conv.pages).toHaveLength(2)
+    for (const page of conv.pages) {
+      expect(page.question.trim()).not.toBe('')
+      expect(page.answer.trim()).not.toBe('')
+    }
+  })
+
+  it('createdAt is parsed from inserted_at ISO string', () => {
+    const [conv] = deepseekExportAdapter.parse(fileInput(DS_LINEAR_FIXTURE))
+    // 2025-02-06T21:14:55.519000+08:00 => UTC 2025-02-06T13:14:55.519Z
+    expect(conv.createdAt).toBe(new Date('2025-02-06T21:14:55.519000+08:00').getTime())
+  })
+})
+
+describe('deepseekExport — branching', () => {
+  it('picks the last child on a branch — newest branch wins', () => {
+    const result = deepseekExportAdapter.parse(fileInput(DS_BRANCH_FIXTURE))
+    expect(result).toHaveLength(1)
+    expect(result[0].pages).toHaveLength(1)
+    expect(result[0].pages[0].answer).toBe('new answer')
+    expect(result[0].pages[0].answer).not.toContain('old answer')
+  })
+})
+
+describe('deepseekExport — detect()', () => {
+  it('returns true for DeepSeek data (mapping + fragments, no current_node)', () => {
+    expect(deepseekExportAdapter.detect(fileInput(DS_LINEAR_FIXTURE))).toBe(true)
+  })
+
+  it('returns false for ChatGPT data (has current_node)', () => {
+    expect(deepseekExportAdapter.detect(fileInput(CHATGPT_FIXTURE))).toBe(false)
+  })
+})
+
+describe('deepseekExport — malformed input', () => {
+  it('throws AdapterError on text input', () => {
+    expect(() => deepseekExportAdapter.parse(textInput('hello'))).toThrow(AdapterError)
+  })
+
+  it('throws AdapterError on non-array', () => {
+    expect(() => deepseekExportAdapter.parse(fileInput({ not: 'an array' }))).toThrow(AdapterError)
+  })
+
+  it('skips invalid items and returns empty when no valid conversations', () => {
+    const result = deepseekExportAdapter.parse(fileInput([{ garbage: true }]))
+    expect(result).toHaveLength(0)
   })
 })

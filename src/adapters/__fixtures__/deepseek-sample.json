@@ -1,0 +1,70 @@
+[
+  {
+    "id": "ds-conv-1",
+    "title": "DeepSeek Sample",
+    "inserted_at": "2025-02-06T21:14:55.519000+08:00",
+    "updated_at": "2025-02-06T21:15:10.000000+08:00",
+    "mapping": {
+      "root": {
+        "id": "root",
+        "parent": null,
+        "children": ["node-u1"],
+        "message": null
+      },
+      "node-u1": {
+        "id": "node-u1",
+        "parent": "root",
+        "children": ["node-a1"],
+        "message": {
+          "files": [],
+          "model": "deepseek-chat",
+          "inserted_at": "2025-02-06T21:14:56.000000+08:00",
+          "fragments": [
+            { "type": "REQUEST", "content": "What is DeepSeek?" }
+          ]
+        }
+      },
+      "node-a1": {
+        "id": "node-a1",
+        "parent": "node-u1",
+        "children": ["node-u2"],
+        "message": {
+          "files": [],
+          "model": "deepseek-chat",
+          "inserted_at": "2025-02-06T21:14:58.000000+08:00",
+          "fragments": [
+            { "type": "SEARCH", "content": "search: deepseek ai" },
+            { "type": "THINK", "content": "The user is asking about DeepSeek..." },
+            { "type": "RESPONSE", "content": "DeepSeek is an AI assistant." }
+          ]
+        }
+      },
+      "node-u2": {
+        "id": "node-u2",
+        "parent": "node-a1",
+        "children": ["node-a2"],
+        "message": {
+          "files": [],
+          "model": "deepseek-chat",
+          "inserted_at": "2025-02-06T21:15:00.000000+08:00",
+          "fragments": [
+            { "type": "REQUEST", "content": "What can it do?" }
+          ]
+        }
+      },
+      "node-a2": {
+        "id": "node-a2",
+        "parent": "node-u2",
+        "children": [],
+        "message": {
+          "files": [],
+          "model": "deepseek-chat",
+          "inserted_at": "2025-02-06T21:15:02.000000+08:00",
+          "fragments": [
+            { "type": "RESPONSE", "content": "It can reason and answer questions." }
+          ]
+        }
+      }
+    }
+  }
+]

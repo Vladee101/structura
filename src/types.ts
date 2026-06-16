@@ -17,7 +17,7 @@ export interface Book {
   title: string
   createdAt: number
   importedAt: number
-  source: 'chatgpt' | 'claude' | 'paste'
+  source: 'chatgpt' | 'claude' | 'paste' | 'deepseek'
   pages: Page[]
   stickers: Sticker[]
 }

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
-import { unzipSync } from 'fflate'
 import { db } from '../db'
 import type { BookRecord } from '../db'
+import { parseZipBuffer } from '../adapters/chatgptExport'
 import { parseInput } from '../adapters/registry'
 import { AdapterError } from '../adapters/types'
 import type { AdapterInput, ParsedConversation } from '../adapters/types'
@@ -16,18 +16,16 @@ interface Props {
   onClose: () => void
 }
 
-async function extractJson(file: File): Promise<unknown> {
+async function extractJson(file: File): Promise<{ json: unknown; manifestVersion: number | null }> {
   if (file.name.toLowerCase().endsWith('.zip')) {
     const buf = await file.arrayBuffer()
-    const unzipped = unzipSync(new Uint8Array(buf))
-    const entry = unzipped['conversations.json']
-    if (!entry) throw new AdapterError('conversations.json not found in ZIP')
-    return JSON.parse(new TextDecoder().decode(entry))
+    const { conversations, manifestVersion } = parseZipBuffer(new Uint8Array(buf))
+    return { json: conversations, manifestVersion }
   }
-  return JSON.parse(await file.text())
+  return { json: JSON.parse(await file.text()), manifestVersion: null }
 }
 
-async function bulkInsert(convs: ParsedConversation[]): Promise<Summary> {
+async function bulkInsert(convs: ParsedConversation[], manifestVersion: number | null): Promise<Summary> {
   const now = Date.now()
   let imported = 0
   let skipped = 0
@@ -39,6 +37,7 @@ async function bulkInsert(convs: ParsedConversation[]): Promise<Summary> {
       id: conv.id, title: conv.title,
       createdAt: conv.createdAt, importedAt: now,
       source: conv.source, pages: conv.pages,
+      manifestVersion,
     }
     await db.books.add(record)
     imported++
@@ -60,9 +59,9 @@ export default function ImportPanel({ onImported, onClose }: Props) {
   const runFile = useCallback(async (file: File) => {
     setStatus('processing'); setError('')
     try {
-      const json = await extractJson(file)
+      const { json, manifestVersion } = await extractJson(file)
       const input: AdapterInput = { kind: 'file', name: file.name, json }
-      const result = await bulkInsert(parseInput(input))
+      const result = await bulkInsert(parseInput(input), manifestVersion)
       setSummary(result); setStatus('done'); onImported()
     } catch (e) {
       setError(e instanceof AdapterError ? e.message : `Could not parse file: ${(e as Error).message}`)
@@ -75,7 +74,7 @@ export default function ImportPanel({ onImported, onClose }: Props) {
     if (trimmed.length < 20) { setError('Paste a conversation first.'); return }
     setStatus('processing'); setError('')
     try {
-      const result = await bulkInsert(parseInput({ kind: 'text', text: trimmed }))
+      const result = await bulkInsert(parseInput({ kind: 'text', text: trimmed }), null)
       setSummary(result); setStatus('done'); onImported()
     } catch (e) {
       setError(e instanceof AdapterError ? e.message : 'Could not parse text.')

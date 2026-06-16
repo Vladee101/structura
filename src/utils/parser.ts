@@ -192,10 +192,8 @@ function pagesFromTurns(turns: Turn[]): Page[] {
     if (!aiTurn || aiTurn.role !== 'ai') { i++; continue }
 
     pages.push({
-      id: `page-${pages.length}`,
-      title: userTurn.content,
-      body: aiTurn.content,
-      index: pages.length,
+      question: userTurn.content,
+      answer: aiTurn.content,
     })
 
     i += 2

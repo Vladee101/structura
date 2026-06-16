@@ -1,5 +1,113 @@
+import { unzipSync } from 'fflate'
 import type { ConversationAdapter, AdapterInput, ParsedConversation, Page } from './types'
 import { AdapterError, hashId } from './types'
+
+// ── ZIP / manifest parsing ────────────────────────────────────────────────────
+
+const _decoder = new TextDecoder()
+const CONV_FILENAME_RE = /^conversations(-\d+)?\.json$/
+
+interface ManifestLogicalFile {
+  files: string[]
+  shard_count?: number
+  sharded?: boolean
+}
+
+interface ExportManifest {
+  version: number
+  logical_files: Record<string, ManifestLogicalFile>
+}
+
+function isManifest(v: unknown): v is ExportManifest {
+  if (!v || typeof v !== 'object') return false
+  const m = v as Record<string, unknown>
+  return typeof m.version === 'number' && !!m.logical_files && typeof m.logical_files === 'object'
+}
+
+export interface ZipParseResult {
+  conversations: unknown[]
+  manifestVersion: number | null
+}
+
+/** Extract conversations from a ChatGPT export ZIP.
+ *  PRIMARY: reads export_manifest.json and inflates only the listed shards in manifest order.
+ *  FALLBACK: if manifest is absent/malformed, matches files by name pattern, sorted ascending. */
+export function parseZipBuffer(zipBytes: Uint8Array): ZipParseResult {
+  // ── PRIMARY: manifest-driven ──────────────────────────────────────────────
+  let manifestWasPresent = false
+  let manifest: ExportManifest | null = null
+  try {
+    const extracted = unzipSync(zipBytes, { filter: f => f.name === 'export_manifest.json' })
+    const bytes = extracted['export_manifest.json']
+    if (bytes) {
+      manifestWasPresent = true
+      const parsed: unknown = JSON.parse(_decoder.decode(bytes))
+      if (isManifest(parsed)) manifest = parsed
+    }
+  } catch {
+    // manifest absent or malformed JSON — fall through to fallback
+  }
+
+  if (manifest !== null) {
+    const version = manifest.version
+    const isKnownVersion = version === 1
+    if (!isKnownVersion) {
+      console.warn(`ChatGPT export: manifest version ${version} is not officially supported.`)
+    }
+
+    const entry = manifest.logical_files['conversations.json'] as ManifestLogicalFile | undefined
+    if (!entry || !Array.isArray(entry.files) || entry.files.length === 0) {
+      throw new AdapterError(
+        `This ChatGPT export uses manifest version ${version}, which Structura hasn't been updated for yet — please open an issue.`
+      )
+    }
+
+    const shardSet = new Set(entry.files)
+    try {
+      const shardZip = unzipSync(zipBytes, { filter: f => shardSet.has(f.name) })
+      const conversations: unknown[] = []
+      for (const name of entry.files) {
+        const bytes = shardZip[name]
+        if (!bytes) throw new Error(`Manifest shard "${name}" not found in ZIP`)
+        const parsed: unknown = JSON.parse(_decoder.decode(bytes))
+        if (!Array.isArray(parsed)) throw new Error(`Shard "${name}" is not a JSON array`)
+        conversations.push(...(parsed as unknown[]))
+      }
+      return { conversations, manifestVersion: version }
+    } catch (e) {
+      if (!isKnownVersion) {
+        throw new AdapterError(
+          `This ChatGPT export uses manifest version ${version}, which Structura hasn't been updated for yet — please open an issue.`
+        )
+      }
+      if (e instanceof AdapterError) throw e
+      throw new AdapterError((e as Error).message)
+    }
+  }
+
+  // ── FALLBACK: filename pattern matching ───────────────────────────────────
+  const fallbackZip = unzipSync(zipBytes, {
+    filter: f => CONV_FILENAME_RE.test(f.name.split('/').pop() ?? f.name),
+  })
+  const sortedEntries = Object.entries(fallbackZip).sort(([a], [b]) => a.localeCompare(b))
+
+  if (sortedEntries.length === 0) {
+    const note = manifestWasPresent
+      ? 'export_manifest.json was found but could not be parsed'
+      : 'no export_manifest.json was found'
+    throw new AdapterError(
+      `No conversation files found in this ZIP (${note}). ` +
+      'The format may have changed — please open an issue with a redacted sample.'
+    )
+  }
+
+  const conversations: unknown[] = []
+  for (const [, bytes] of sortedEntries) {
+    const parsed: unknown = JSON.parse(_decoder.decode(bytes))
+    if (Array.isArray(parsed)) conversations.push(...(parsed as unknown[]))
+  }
+  return { conversations, manifestVersion: null }
+}
 
 // ── Type guards ───────────────────────────────────────────────────────────────
 
@@ -70,7 +178,7 @@ export function linearize(conv: GptConversation): GptMessage[] {
   const out: GptMessage[] = []
   let nodeId: string | null = conv.current_node
   while (nodeId) {
-    const node = conv.mapping[nodeId]
+    const node: GptNode | undefined = conv.mapping[nodeId]
     if (!node) break
     if (node.message) out.push(node.message)
     nodeId = node.parent ?? null
