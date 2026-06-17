@@ -140,7 +140,7 @@ In plain terms:
 - You can't repackage it as a competing commercial offering.
 - Each release automatically becomes open source (Apache 2.0) two years after it ships.
 
-The point of making the source public is trust: a privacy tool should be something you can inspect, not something you have to believe. See [`LICENSE`](./LICENSE) for the full text and https://fsl.software for background.
+The point of making the source public is trust: a privacy tool should be something you can inspect, not something you have to believe. See [`LICENSE`](./license) for the full text and https://fsl.software for background.
 
 ---
 
