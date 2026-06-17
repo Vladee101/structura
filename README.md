@@ -131,7 +131,7 @@ By contributing, you agree that your contributions are licensed under the projec
 
 ## License
 
-Structura is **source-available**, not open source. It's licensed under the **Functional Source License (FSL-1.1-Apache-2.0)**.
+Structura is **source-available**, not open source. It's licensed under the **Functional Source License (FSL-1.1-ALv2)**.
 
 In plain terms:
 
