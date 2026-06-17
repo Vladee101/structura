@@ -8,8 +8,6 @@ It runs entirely in your browser. **No servers, no cloud, no accounts, no teleme
 
 🔗 **Live app:** https://structura.wiki
 
-> _Add a hero screenshot or GIF here — importing a ZIP and flipping through a book is the one that sells it._
-
 ---
 
 ## What it does
