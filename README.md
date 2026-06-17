@@ -114,18 +114,17 @@ React + Vite + TypeScript + Tailwind on the front end; IndexedDB via [Dexie](htt
 
 ## Contributing
 
-Contributions are welcome — and the architecture is built to make one kind especially easy: **adding support for a new platform.**
+Structura is developed primarily by its maintainer and follows a product-driven roadmap rather than a community-driven one.
 
-If a tool you use exports its conversations and Structura doesn't read it yet:
+Bug reports, reproducible issues, and suggestions are welcome through GitHub Issues and are genuinely helpful.
 
-1. Look at the existing adapters in `src/adapters/` — they're working examples.
-2. Implement the `ConversationAdapter` interface (`detect()` + `parse()`) for the new format in a single new file.
-3. Add a small fixture and a test following the existing pattern.
-4. Open a pull request.
+Pull requests may be reviewed on a case-by-case basis, but acceptance is not guaranteed and development priorities are determined by the project's maintainer.
 
-For anything larger, please open an issue first so we can talk through the approach. Bug reports and reproductions are genuinely valuable too.
+If Structura doesn't support a platform you use, opening an issue with details about that platform's export format is often the most helpful first step.
 
-By contributing, you agree that your contributions are licensed under the project's license (below).
+Because Structura is source-available, you're also free to fork and modify the software for your own use, subject to the terms of the license.
+
+By contributing, you agree that your contributions are licensed under the project's license.
 
 ---
 
@@ -135,7 +134,7 @@ Structura is **source-available**, not open source. It's licensed under the **Fu
 
 In plain terms:
 
-- You can read, audit, run, self-host, fork, and modify the code, and contribute to it.
+- You can read, audit, run, self-host, fork, and modify the code.
 - You can use it freely for any purpose that isn't a competing commercial product.
 - You can't repackage it as a competing commercial offering.
 - Each release automatically becomes open source (Apache 2.0) two years after it ships.
