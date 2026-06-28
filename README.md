@@ -141,4 +141,4 @@ The point of making the source public is trust: a privacy tool should be somethi
 
 ---
 
-Built by [Vladee101](https://github.com/Vladee101).
+Built by [Softwarean™](https://softwarean.com)
