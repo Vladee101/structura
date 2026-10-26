@@ -61,6 +61,34 @@ function toPagesFromClaude(msgs: ClaudeMessage[]): Page[] {
   return pairTurns(turns)
 }
 
+// ── Download manifest ─────────────────────────────────────────────────────────
+
+export interface ClaudeDownloadLink {
+  filename: string
+  url: string
+}
+
+/** Claude's newer exports arrive as a manifest of download links rather than the data itself.
+ *  Returns the conversation download links (claude.ai only), or null if this isn't such a manifest. */
+export function readClaudeDownloadManifest(json: unknown): ClaudeDownloadLink[] | null {
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null
+  const files = (json as Record<string, unknown>).data_files
+  if (!Array.isArray(files) || !files.some(f => !!f && typeof f === 'object' && 'export_url' in f)) return null
+
+  const links: ClaudeDownloadLink[] = []
+  for (const f of files) {
+    if (!f || typeof f !== 'object') continue
+    const { category, export_url, filename } = f as Record<string, unknown>
+    if (category !== 'conversations' || typeof export_url !== 'string') continue
+    try {
+      const u = new URL(export_url)
+      if (u.protocol !== 'https:' || u.hostname !== 'claude.ai') continue
+    } catch { continue }
+    links.push({ filename: typeof filename === 'string' ? filename : 'conversations.zip', url: export_url })
+  }
+  return links
+}
+
 // ── Adapter ───────────────────────────────────────────────────────────────────
 
 export const claudeExportAdapter: ConversationAdapter = {

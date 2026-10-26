@@ -3,6 +3,8 @@ import { db } from '../db'
 import type { BookRecord } from '../db'
 import { parseZipBuffer } from '../adapters/chatgptExport'
 import { parseInput } from '../adapters/registry'
+import { readClaudeDownloadManifest } from '../adapters/claudeExport'
+import type { ClaudeDownloadLink } from '../adapters/claudeExport'
 import { AdapterError } from '../adapters/types'
 import type { AdapterInput, ParsedConversation } from '../adapters/types'
 
@@ -52,14 +54,24 @@ export default function ImportPanel({ onImported, onClose }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [claudeLinks, setClaudeLinks] = useState<ClaudeDownloadLink[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const reset = () => { setStatus('idle'); setSummary(null); setError(''); setText('') }
+  const reset = () => { setStatus('idle'); setSummary(null); setError(''); setText(''); setClaudeLinks(null) }
 
   const runFile = useCallback(async (file: File) => {
     setStatus('processing'); setError('')
     try {
       const { json, manifestVersion } = await extractJson(file)
+      const links = readClaudeDownloadManifest(json)
+      if (links) {
+        if (links.length === 0) throw new AdapterError(
+          'This Claude export file has no conversations link. Try requesting a new export from Claude.'
+        )
+        setClaudeLinks(links); setStatus('idle')
+        return
+      }
+      setClaudeLinks(null)
       const input: AdapterInput = { kind: 'file', name: file.name, json }
       const result = await bulkInsert(parseInput(input), manifestVersion)
       setSummary(result); setStatus('done'); onImported()
@@ -110,6 +122,16 @@ export default function ImportPanel({ onImported, onClose }: Props) {
           </div>
         ) : (
           <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,.zip"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) { void runFile(file); e.target.value = '' }
+              }}
+            />
             <div className="mode-tabs">
               <button type="button" className={`mode-tab ${mode === 'file' ? 'mode-tab--active' : ''}`}
                 onClick={() => { setMode('file'); reset() }}>
@@ -121,7 +143,36 @@ export default function ImportPanel({ onImported, onClose }: Props) {
               </button>
             </div>
 
-            {mode === 'file' ? (
+            {mode === 'file' && claudeLinks ? (
+              <div className="claude-manifest-step">
+                <p className="import-instruction">
+                  <strong>Almost there.</strong> Claude sent you a list of download links, not your chats yet.
+                  Download your conversations below, then drop that ZIP here.
+                </p>
+                <div className="claude-manifest-links">
+                  {claudeLinks.map(link => (
+                    <a key={link.url} className="import-btn" href={link.url} target="_blank" rel="noopener noreferrer">
+                      Download {claudeLinks.length > 1 ? link.filename : 'your conversations'}
+                    </a>
+                  ))}
+                </div>
+                <p className="import-hint">
+                  Opens claude.ai, so make sure you're signed in there. Each link works once and
+                  expires 24 hours after Claude emails it; if it fails, request a new export.
+                </p>
+                <div
+                  className={`drop-zone${dragging ? ' drop-zone--over' : ''}${status === 'processing' ? ' drop-zone--busy' : ''}`}
+                  onClick={() => status !== 'processing' && fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={onDrop}
+                >
+                  {status === 'processing' ? 'Parsing…' : 'Drop the conversations ZIP here or click to browse'}
+                </div>
+                {error && <p className="import-error">{error}</p>}
+              </div>
+            ) : null}
+            {mode === 'file' && claudeLinks ? null : mode === 'file' ? (
               <>
                 <p className="import-instruction">
                   Drop a <strong>conversations.json</strong> or ChatGPT export <strong>.zip</strong>,
@@ -135,16 +186,6 @@ export default function ImportPanel({ onImported, onClose }: Props) {
                   onDrop={onDrop}
                 >
                   {status === 'processing' ? 'Parsing…' : 'Drop file here or click to browse'}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,.zip"
-                    style={{ display: 'none' }}
-                    onChange={e => {
-                      const file = e.target.files?.[0]
-                      if (file) { void runFile(file); e.target.value = '' }
-                    }}
-                  />
                 </div>
                 {error && <p className="import-error">{error}</p>}
               </>

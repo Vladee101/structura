@@ -420,6 +420,22 @@ export default function LibraryView() {
           onClose={() => setShowImport(false)}
         />
       )}
+
+      <div className="footer-links">
+        <a href="#/privacy" className="footer-link">Privacy</a>
+        <a href="#/how-to-import" className="footer-link">How to Import</a>
+        <span className="footer-credit">
+          Built by{' '}
+          <a
+            href="https://softwarean.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer-credit-link"
+          >
+            Softwarean™
+          </a>
+        </span>
+      </div>
     </div>
   )
 }

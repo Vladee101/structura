@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { zipSync } from 'fflate'
 import { chatgptExportAdapter, linearize, pairTurns, parseZipBuffer } from '../chatgptExport'
-import { claudeExportAdapter } from '../claudeExport'
+import { claudeExportAdapter, readClaudeDownloadManifest } from '../claudeExport'
 import { deepseekExportAdapter } from '../deepseekExport'
 import { pasteAdapter } from '../paste'
+import { parseInput } from '../registry'
 import { AdapterError } from '../types'
 import type { AdapterInput } from '../types'
 
@@ -453,5 +454,46 @@ describe('deepseekExport — malformed input', () => {
   it('skips invalid items and returns empty when no valid conversations', () => {
     const result = deepseekExportAdapter.parse(fileInput([{ garbage: true }]))
     expect(result).toHaveLength(0)
+  })
+})
+
+// ── Claude multi-file export (2026 format) ────────────────────────────────────
+
+describe('Claude multi-file export', () => {
+  const enc = (v: unknown) => new TextEncoder().encode(JSON.stringify(v))
+
+  it('rejects the download manifest with a helpful message', () => {
+    const manifest = {
+      version: '1.0',
+      data_files: [{ category: 'conversations', filename: 'conversations-000.zip', export_url: 'https://claude.ai/x' }],
+    }
+    expect(() => parseInput(fileInput(manifest))).toThrow(/conversations-000\.zip/)
+  })
+
+  it('reads conversations from arbitrarily named JSON files in the ZIP', () => {
+    const zip = zipSync({
+      'conversations/a.json': enc(CLAUDE_FIXTURE[0]),
+      'conversations/b.json': enc([{ ...CLAUDE_FIXTURE[0], uuid: 'claude-conv-2' }]),
+    })
+    const { conversations } = parseZipBuffer(zip)
+    const parsed = parseInput(fileInput(conversations))
+    expect(parsed.map(c => c.id)).toEqual(['claude-conv-fixture-1', 'claude-conv-2'])
+  })
+})
+
+describe('readClaudeDownloadManifest', () => {
+  it('returns only claude.ai conversation links', () => {
+    const links = readClaudeDownloadManifest({
+      data_files: [
+        { category: 'projects', filename: 'projects-000.zip', export_url: 'https://claude.ai/export/p' },
+        { category: 'conversations', filename: 'conversations-000.zip', export_url: 'https://claude.ai/export/c' },
+        { category: 'conversations', filename: 'evil.zip', export_url: 'https://evil.example/c' },
+      ],
+    })
+    expect(links).toEqual([{ filename: 'conversations-000.zip', url: 'https://claude.ai/export/c' }])
+  })
+
+  it('returns null for non-manifest input', () => {
+    expect(readClaudeDownloadManifest(CLAUDE_FIXTURE)).toBeNull()
   })
 })

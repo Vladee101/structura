@@ -89,7 +89,16 @@ export function parseZipBuffer(zipBytes: Uint8Array): ZipParseResult {
   const fallbackZip = unzipSync(zipBytes, {
     filter: f => CONV_FILENAME_RE.test(f.name.split('/').pop() ?? f.name),
   })
-  const sortedEntries = Object.entries(fallbackZip).sort(([a], [b]) => a.localeCompare(b))
+  let sortedEntries = Object.entries(fallbackZip).sort(([a], [b]) => a.localeCompare(b))
+
+  // Last resort: newer Claude exports (conversations-000.zip) may use other file names
+  // or one file per conversation — take every .json in the archive.
+  if (sortedEntries.length === 0) {
+    const anyJson = unzipSync(zipBytes, {
+      filter: f => f.name.toLowerCase().endsWith('.json') && !f.name.split('/').pop()?.startsWith('.'),
+    })
+    sortedEntries = Object.entries(anyJson).sort(([a], [b]) => a.localeCompare(b))
+  }
 
   if (sortedEntries.length === 0) {
     const note = manifestWasPresent
@@ -103,8 +112,10 @@ export function parseZipBuffer(zipBytes: Uint8Array): ZipParseResult {
 
   const conversations: unknown[] = []
   for (const [, bytes] of sortedEntries) {
-    const parsed: unknown = JSON.parse(_decoder.decode(bytes))
+    let parsed: unknown
+    try { parsed = JSON.parse(_decoder.decode(bytes)) } catch { continue }
     if (Array.isArray(parsed)) conversations.push(...(parsed as unknown[]))
+    else if (parsed && typeof parsed === 'object') conversations.push(parsed)
   }
   return { conversations, manifestVersion: null }
 }
