@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Page, Sticker } from './types'
+import type { Comment, Page, Sticker } from './types'
 
 export interface BookRecord {
   id: string
@@ -30,6 +30,7 @@ class StructuraDB extends Dexie {
   stickers!: Table<Sticker, string>
   shelves!: Table<Shelf, string>
   shelfMemberships!: Table<ShelfMembership, string>
+  comments!: Table<Comment, string>
 
   constructor() {
     super('structura')
@@ -41,6 +42,10 @@ class StructuraDB extends Dexie {
     this.version(2).stores({
       shelves: 'id, createdAt',
       shelfMemberships: 'id, [shelfId+bookId], shelfId, bookId',
+    })
+    // Version 3: comments anchored to passages of an answer.
+    this.version(3).stores({
+      comments: 'id, bookId, createdAt',
     })
   }
 }

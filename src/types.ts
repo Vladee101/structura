@@ -12,6 +12,22 @@ export interface Sticker {
   createdAt: number
 }
 
+/** A note attached to a passage of an answer. Offsets index into the rendered
+ *  (plain) text of the answer's source lines, so marks survive re-rendering. */
+export interface Comment {
+  id: string
+  bookId: string
+  pageIndex: number
+  startLine: number
+  startOffset: number
+  endLine: number
+  endOffset: number
+  quote: string
+  text: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface Book {
   id: string
   title: string
@@ -20,6 +36,7 @@ export interface Book {
   source: 'chatgpt' | 'claude' | 'paste' | 'deepseek'
   pages: Page[]
   stickers: Sticker[]
+  comments: Comment[]
 }
 
 export const STICKER_COLORS = [

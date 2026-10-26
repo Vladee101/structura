@@ -12,11 +12,20 @@ export interface ExportSticker {
   text: string
 }
 
+export interface ExportComment {
+  pageIndex: number
+  startLine: number
+  startOffset: number
+  quote: string
+  text: string
+}
+
 export interface ExportBook {
   title: string
   source: string
   pages: ExportPage[]
   stickers: ExportSticker[]
+  comments?: ExportComment[]
 }
 
 export interface ExportInput {
@@ -91,12 +100,25 @@ export function renderMarkdown(input: ExportInput): string {
     lines.push(`# ${book.title}`)
     lines.push(`_Source: ${SOURCE_LABELS[book.source] ?? book.source}_`)
     lines.push('')
-    for (const page of book.pages) {
+    book.pages.forEach((page, pageIndex) => {
       lines.push(`## ${page.question}`)
       lines.push('')
       lines.push(page.answer)
       lines.push('')
-    }
+      const pageComments = (book.comments ?? [])
+        .filter(c => c.pageIndex === pageIndex)
+        .sort((a, b) => a.startLine - b.startLine || a.startOffset - b.startOffset)
+      if (pageComments.length > 0) {
+        lines.push('### Comments')
+        lines.push('')
+        for (const c of pageComments) {
+          lines.push(`> ${c.quote}`)
+          lines.push('')
+          lines.push(`**Comment:** ${c.text}`)
+          lines.push('')
+        }
+      }
+    })
     return lines.join('\n').trimEnd() + '\n'
   }
 
@@ -154,7 +176,7 @@ export function triggerDownload(content: string, filename: string): void {
 /** Scope 1: export a book's full Q&A content. */
 export function exportBook(book: Book): void {
   const input: ExportInput = {
-    books: [{ title: book.title, source: book.source, pages: book.pages, stickers: [] }],
+    books: [{ title: book.title, source: book.source, pages: book.pages, stickers: [], comments: book.comments }],
   }
   triggerDownload(renderMarkdown(input), safeFilename(book.title))
 }

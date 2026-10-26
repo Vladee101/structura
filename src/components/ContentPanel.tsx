@@ -1,6 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { Page } from '../types'
+import { Page, Comment } from '../types'
 import StickerPopup from './StickerPopup'
+import CommentCard from './CommentCard'
+import { blockForLine, tokenizeBlock, highlightForLine, segmentTokens } from '../utils/comments'
+import type { Highlight, Segment } from '../utils/comments'
 
 const PencilIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -9,10 +12,21 @@ const PencilIcon = () => (
   </svg>
 )
 
+export interface CommentAnchor {
+  startLine: number
+  startOffset: number
+  endLine: number
+  endOffset: number
+  quote: string
+}
+
 interface Popup {
   x: number
   y: number
+  belowY: number
   text: string
+  anchor: CommentAnchor | null
+  composing: boolean
 }
 
 interface StickerPartial {
@@ -21,11 +35,48 @@ interface StickerPartial {
   color: string
 }
 
+/** Character offset of (node, offset) within block's displayed text. */
+function offsetWithin(block: HTMLElement, node: Node, offset: number): number {
+  const r = document.createRange()
+  r.selectNodeContents(block)
+  r.setEnd(node, offset)
+  return r.toString().length
+}
+
+/** Maps a DOM selection onto answer lines. Comment cards and gaps between blocks are ignored. */
+function anchorFromRange(range: Range, root: HTMLElement): CommentAnchor | null {
+  const parts: { line: number; start: number; end: number; text: string }[] = []
+  for (const block of root.querySelectorAll<HTMLElement>('[data-line]')) {
+    if (!range.intersectsNode(block)) continue
+    const full = block.textContent ?? ''
+    let start = block.contains(range.startContainer) ? offsetWithin(block, range.startContainer, range.startOffset) : 0
+    let end = block.contains(range.endContainer) ? offsetWithin(block, range.endContainer, range.endOffset) : full.length
+    while (start < end && /\s/.test(full[start])) start++
+    while (end > start && /\s/.test(full[end - 1])) end--
+    if (end > start) parts.push({ line: Number(block.dataset.line), start, end, text: full.slice(start, end) })
+  }
+  if (parts.length === 0) return null
+  const first = parts[0]
+  const last = parts[parts.length - 1]
+  return {
+    startLine: first.line,
+    startOffset: first.start,
+    endLine: last.line,
+    endOffset: last.end,
+    quote: parts.map(p => p.text).join(' '),
+  }
+}
+
 interface Props {
   page: Page
   pageIndex: number
   pageCount: number
   stickerCount: number
+  comments: Comment[]
+  commentCount: number
+  onAddComment: (anchor: CommentAnchor, text: string) => void
+  onUpdateComment: (id: string, text: string) => void
+  onRemoveComment: (id: string) => void
   onAddSticker: (sticker: StickerPartial) => void
   onShowStickers: () => void
   onExportBook: () => void
@@ -42,6 +93,11 @@ export default function ContentPanel({
   pageIndex,
   pageCount,
   stickerCount,
+  comments,
+  commentCount,
+  onAddComment,
+  onUpdateComment,
+  onRemoveComment,
   onAddSticker,
   onShowStickers,
   onExportBook,
@@ -57,12 +113,32 @@ export default function ContentPanel({
   const [popup, setPopup] = useState<Popup | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
   const [editValue, setEditValue] = useState('')
+  const [showComments, setShowComments] = useState(true)
+  const [flashId, setFlashId] = useState<string | null>(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 })
     setPopup(null)
     setEditingTitle(false)
   }, [pageIndex])
+
+  useEffect(() => {
+    if (!flashId) return
+    const t = window.setTimeout(() => setFlashId(null), 1200)
+    return () => window.clearTimeout(t)
+  }, [flashId])
+
+  const showCard = (id: string) => {
+    document.getElementById(`comment-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setFlashId(id)
+  }
+
+  const showPassage = (id: string) => {
+    bodyRef.current
+      ?.querySelector(`[data-comment-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setFlashId(id)
+  }
 
   const startRename = () => {
     setEditValue(page.question)
@@ -78,6 +154,8 @@ export default function ContentPanel({
   const cancelRename = () => setEditingTitle(false)
 
   const handleMouseUp = useCallback(() => {
+    // An open comment box stays put until saved or cancelled, so a stray click can't lose the draft.
+    if (popup?.composing) return
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed) {
       setPopup(null)
@@ -88,7 +166,8 @@ export default function ContentPanel({
       setPopup(null)
       return
     }
-    if (!bodyRef.current?.contains(selection.anchorNode)) {
+    const root = bodyRef.current
+    if (!root?.contains(selection.anchorNode)) {
       setPopup(null)
       return
     }
@@ -97,9 +176,12 @@ export default function ContentPanel({
     setPopup({
       x: rect.left + rect.width / 2,
       y: rect.top + window.scrollY - 44,
+      belowY: rect.bottom + 8,
       text,
+      anchor: anchorFromRange(range, root),
+      composing: false,
     })
-  }, [])
+  }, [popup?.composing])
 
   const makeSticker = () => {
     if (!popup) return
@@ -108,33 +190,60 @@ export default function ContentPanel({
     window.getSelection()?.removeAllRanges()
   }
 
-  const renderBody = (text: string) => {
-    return text.split('\n').map((line, i) => {
-      if (line.startsWith('```')) return null
-      if (line.startsWith('### ')) return <h3 key={i}>{line.slice(4)}</h3>
-      if (line.startsWith('## ')) return <h2 key={i}>{line.slice(3)}</h2>
-      if (line.startsWith('# ')) return <h2 key={i}>{line.slice(2)}</h2>
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        return <li key={i}>{renderInline(line.slice(2))}</li>
-      }
-      if (/^\d+\. /.test(line)) {
-        return <li key={i}>{renderInline(line.replace(/^\d+\. /, ''))}</li>
-      }
-      if (line.trim() === '') return <br key={i} />
-      return <p key={i}>{renderInline(line)}</p>
-    })
+  const saveComment = (text: string) => {
+    if (!popup?.anchor) return
+    onAddComment(popup.anchor, text)
+    setShowComments(true)
+    setPopup(null)
+    window.getSelection()?.removeAllRanges()
   }
 
-  const renderInline = (text: string): React.ReactNode => {
-    const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i}>{part.slice(2, -2)}</strong>
-      }
-      if (part.startsWith('`') && part.endsWith('`')) {
-        return <code key={i}>{part.slice(1, -1)}</code>
-      }
-      return part
+  const renderSegments = (segments: Segment[]): React.ReactNode =>
+    segments.map((seg, i) => {
+      const inner = seg.kind === 'strong' ? <strong>{seg.text}</strong>
+        : seg.kind === 'code' ? <code>{seg.text}</code>
+        : seg.text
+      if (!seg.highlightId) return <span key={i}>{inner}</span>
+      const id = seg.highlightId
+      return (
+        <mark
+          key={i}
+          className={`comment-mark${flashId === id ? ' comment-mark--flash' : ''}`}
+          data-comment-id={id}
+          onClick={() => { if (window.getSelection()?.isCollapsed) showCard(id) }}
+        >
+          {inner}
+        </mark>
+      )
+    })
+
+  const renderBody = (text: string) => {
+    const visible = showComments ? comments : []
+    return text.split('\n').map((line, i) => {
+      const block = blockForLine(line)
+      if (!block) return line.startsWith('```') ? null : <br key={i} />
+      const tokens = tokenizeBlock(block)
+      const length = tokens.reduce((n, t) => n + t.text.length, 0)
+      const highlights = visible
+        .map(c => highlightForLine(c, i, length))
+        .filter((h): h is Highlight => h !== null)
+      const Tag = block.tag
+      const cards = visible.filter(c => c.endLine === i)
+      return (
+        <div key={i} className="content-block">
+          <Tag data-line={i}>{renderSegments(segmentTokens(tokens, highlights))}</Tag>
+          {cards.map(c => (
+            <CommentCard
+              key={c.id}
+              comment={c}
+              flash={flashId === c.id}
+              onUpdate={onUpdateComment}
+              onRemove={onRemoveComment}
+              onShowPassage={showPassage}
+            />
+          ))}
+        </div>
+      )
     })
   }
 
@@ -172,6 +281,17 @@ export default function ContentPanel({
             title={stickerCount === 0 ? 'No stickers to export' : 'Download stickers as Markdown'}
           >
             ↓ Highlights
+          </button>
+          <button
+            type="button"
+            className={`topbar-stickers${showComments ? '' : ' topbar-comments--off'}`}
+            onClick={() => setShowComments(v => !v)}
+            disabled={commentCount === 0}
+            aria-pressed={showComments}
+            title={commentCount === 0 ? 'Highlight text and choose Comment to add one'
+              : showComments ? 'Hide comments' : 'Show comments'}
+          >
+            Comments {commentCount > 0 && <span className="sticker-badge">{commentCount}</span>}
           </button>
           <button type="button" className="topbar-stickers" onClick={onShowStickers}>
             Stickers {stickerCount > 0 && <span className="sticker-badge">{stickerCount}</span>}
@@ -218,7 +338,13 @@ export default function ContentPanel({
         <StickerPopup
           x={popup.x}
           y={popup.y}
+          belowY={popup.belowY}
+          quote={popup.anchor?.quote ?? popup.text}
+          composing={popup.composing}
+          canComment={popup.anchor !== null}
           onMake={makeSticker}
+          onStartComment={() => setPopup(p => p && { ...p, composing: true })}
+          onSaveComment={saveComment}
           onDismiss={() => setPopup(null)}
         />
       )}

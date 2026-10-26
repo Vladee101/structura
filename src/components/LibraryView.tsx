@@ -100,10 +100,11 @@ export default function LibraryView() {
   }
 
   const deleteBook = async (id: string) => {
-    if (!window.confirm('Delete this book and all its stickers?')) return
-    await db.transaction('rw', db.books, db.stickers, db.shelfMemberships, async () => {
+    if (!window.confirm('Delete this book and all its stickers and comments?')) return
+    await db.transaction('rw', [db.books, db.stickers, db.comments, db.shelfMemberships], async () => {
       await db.books.delete(id)
       await db.stickers.where('bookId').equals(id).delete()
+      await db.comments.where('bookId').equals(id).delete()
       await db.shelfMemberships.where('bookId').equals(id).delete()
     })
     setBooks(prev => prev.filter(b => b.id !== id))
@@ -228,6 +229,7 @@ export default function LibraryView() {
       source: b.source,
       pages: b.pages,
       stickers: stickers.filter(s => s.bookId === b.id),
+      comments: [],
     }))
     exportAllStickers(fullBooks, activeShelf?.name)
   }

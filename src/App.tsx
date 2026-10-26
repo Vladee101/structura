@@ -37,8 +37,11 @@ export default function App() {
     const bookId = decodeURIComponent(hash.slice('#/book/'.length))
     db.books.get(bookId).then(async record => {
       if (!record) { window.location.hash = '#/'; return }
-      const stickers = await db.stickers.where('bookId').equals(bookId).toArray()
-      setBook({ ...record, stickers })
+      const [stickers, comments] = await Promise.all([
+        db.stickers.where('bookId').equals(bookId).toArray(),
+        db.comments.where('bookId').equals(bookId).toArray(),
+      ])
+      setBook({ ...record, stickers, comments })
     })
   }, [hash, ready])
 
