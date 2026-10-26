@@ -4,6 +4,7 @@ import type { BookRecord } from '../db'
 import { parseZipBuffer } from '../adapters/chatgptExport'
 import { parseInput } from '../adapters/registry'
 import { readClaudeDownloadManifest } from '../adapters/claudeExport'
+import { attachToStoredPages } from '../adapters/claudeAttachments'
 import type { ClaudeDownloadLink } from '../adapters/claudeExport'
 import { AdapterError } from '../adapters/types'
 import type { AdapterInput, ParsedConversation } from '../adapters/types'
@@ -11,7 +12,7 @@ import type { AdapterInput, ParsedConversation } from '../adapters/types'
 type Mode = 'file' | 'paste'
 type Status = 'idle' | 'processing' | 'done' | 'error'
 
-interface Summary { imported: number; skipped: number }
+interface Summary { imported: number; updated: number; skipped: number }
 
 interface Props {
   onImported: () => void
@@ -30,11 +31,21 @@ async function extractJson(file: File): Promise<{ json: unknown; manifestVersion
 async function bulkInsert(convs: ParsedConversation[], manifestVersion: number | null): Promise<Summary> {
   const now = Date.now()
   let imported = 0
+  let updated = 0
   let skipped = 0
   for (const conv of convs) {
     if (conv.pages.length === 0) { skipped++; continue }
     const existing = await db.books.get(conv.id)
-    if (existing) { skipped++; continue }
+    if (existing) {
+      // Books imported before files and visuals were supported get them added in place.
+      // Answer text is untouched, so stickers and comments stay where they are.
+      const upgraded = conv.legacyPages && !existing.pages.some(p => p.attachments?.length)
+        ? attachToStoredPages(existing.pages, conv.legacyPages)
+        : null
+      if (upgraded) { await db.books.update(conv.id, { pages: upgraded }); updated++ }
+      else skipped++
+      continue
+    }
     const record: BookRecord = {
       id: conv.id, title: conv.title,
       createdAt: conv.createdAt, importedAt: now,
@@ -44,7 +55,7 @@ async function bulkInsert(convs: ParsedConversation[], manifestVersion: number |
     await db.books.add(record)
     imported++
   }
-  return { imported, skipped }
+  return { imported, updated, skipped }
 }
 
 export default function ImportPanel({ onImported, onClose }: Props) {
@@ -113,6 +124,7 @@ export default function ImportPanel({ onImported, onClose }: Props) {
           <div className="import-summary">
             <p className="import-summary-text">
               Imported <strong>{summary.imported}</strong> conversation{summary.imported !== 1 ? 's' : ''}
+              {summary.updated > 0 && <>, added files and visuals to <strong>{summary.updated}</strong> existing book{summary.updated !== 1 ? 's' : ''}</>}
               {summary.skipped > 0 && `, skipped ${summary.skipped} empty or duplicate`}.
             </p>
             <div className="import-summary-actions">

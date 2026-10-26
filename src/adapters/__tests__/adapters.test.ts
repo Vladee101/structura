@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { zipSync } from 'fflate'
 import { chatgptExportAdapter, linearize, pairTurns, parseZipBuffer } from '../chatgptExport'
-import { claudeExportAdapter, readClaudeDownloadManifest } from '../claudeExport'
+import { claudeExportAdapter, readClaudeDownloadManifest, stripUnsupportedBlocks } from '../claudeExport'
 import { deepseekExportAdapter } from '../deepseekExport'
 import { pasteAdapter } from '../paste'
 import { parseInput } from '../registry'
@@ -495,5 +495,47 @@ describe('readClaudeDownloadManifest', () => {
 
   it('returns null for non-manifest input', () => {
     expect(readClaudeDownloadManifest(CLAUDE_FIXTURE)).toBeNull()
+  })
+})
+
+describe('Claude unsupported-block placeholders', () => {
+  const PH = 'This block is not supported on your current device yet.'
+
+  it('stripUnsupportedBlocks removes fenced placeholders and collapses the gap', () => {
+    expect(stripUnsupportedBlocks(`Before\n\n\`\`\`\n${PH}\n\`\`\`\n\n\n\nAfter`)).toBe('Before\n\nAfter')
+    expect(stripUnsupportedBlocks(`Only ${PH} inline`)).toBe('Only  inline')
+  })
+
+  it('builds answers from text blocks, skipping tool and thinking blocks', () => {
+    const conv = [{
+      uuid: 'ph-1', name: 'Tools', created_at: '2026-10-26T09:00:00Z',
+      chat_messages: [
+        { sender: 'human', text: 'Make a chart', content: [{ type: 'text', text: 'Make a chart' }] },
+        {
+          sender: 'assistant',
+          text: `Sure.\n\n\`\`\`\n${PH}\n\`\`\`\n\nDone.`,
+          content: [
+            { type: 'thinking' },
+            { type: 'text', text: 'Sure.' },
+            { type: 'tool_use' },
+            { type: 'tool_result' },
+            { type: 'text', text: 'Done.' },
+          ],
+        },
+      ],
+    }]
+    const [book] = claudeExportAdapter.parse(fileInput(conv))
+    expect(book.pages[0].answer).toBe('Sure.\n\nDone.')
+  })
+
+  it('falls back to cleaned text when there are no text blocks', () => {
+    const conv = [{
+      uuid: 'ph-2', name: 'Old', created_at: '2026-10-26T09:00:00Z',
+      chat_messages: [
+        { sender: 'human', text: 'Q?' },
+        { sender: 'assistant', text: `A.\n\n\`\`\`\n${PH}\n\`\`\`` },
+      ],
+    }]
+    expect(claudeExportAdapter.parse(fileInput(conv))[0].pages[0].answer).toBe('A.')
   })
 })

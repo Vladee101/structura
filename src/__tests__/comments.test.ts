@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  blockForLine, tokenizeBlock, blockTextLength, highlightForLine, segmentTokens, renumberAfterPageDelete,
+  blockForLine, isHiddenLine, tokenizeBlock, blockTextLength, highlightForLine, segmentTokens, renumberAfterPageDelete,
 } from '../utils/comments'
 import { renderMarkdown } from '../utils/markdownExport'
 
@@ -75,5 +75,14 @@ describe('book export with comments', () => {
     })
     expect(md).not.toMatch(/## Q1\n\nA1\n\n### Comments/)
     expect(md).toContain('## Q2\n\nA2\n\n### Comments\n\n> earlier\n\n**Comment:** first\n\n> later\n\n**Comment:** second\n')
+  })
+})
+
+describe('isHiddenLine', () => {
+  it('hides fences and the unsupported-block placeholder only', () => {
+    expect(isHiddenLine('```')).toBe(true)
+    expect(isHiddenLine('This block is not supported on your current device yet.')).toBe(true)
+    expect(isHiddenLine('Normal text')).toBe(false)
+    expect(blockForLine('This block is not supported on your current device yet.')).toBeNull()
   })
 })

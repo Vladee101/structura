@@ -1,10 +1,63 @@
-import type { Book } from '../types'
+import type { Attachment, Book } from '../types'
+import { stripUnsupportedBlocks } from '../adapters/claudeExport'
+import { ATTACHMENT_MARKER_RE } from '../adapters/claudeAttachments'
+
+// ── Attachments ───────────────────────────────────────────────────────────────
+
+function fileName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path
+}
+
+function attachmentMarkdown(a: Attachment): string {
+  switch (a.kind) {
+    case 'file': {
+      const name = fileName(a.path)
+      const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : ''
+      const longestRun = Math.max(2, ...(a.content.match(/`+/g) ?? []).map(r => r.length))
+      const fence = '`'.repeat(longestRun + 1)
+      return `**${a.updated ? 'Updated file' : 'File'}: \`${name}\`**\n\n${fence}${ext}\n${a.content.replace(/\n$/, '')}\n${fence}`
+    }
+    case 'widget':
+      return `*[Interactive widget: ${a.title.replace(/[_-]+/g, ' ')} — open this book in Structura to view it]*`
+    case 'chart': {
+      const cell = (s: string) => s.replace(/\|/g, '\\|')
+      const rows = a.categories.map((c, i) => `| ${cell(c)} | ${a.series.map(s => s.values[i] ?? '').join(' | ')} |`)
+      return [
+        `**Chart: ${a.title}**`,
+        '',
+        `| | ${a.series.map(s => cell(s.name)).join(' | ')} |`,
+        `|---|${a.series.map(() => '---').join('|')}|`,
+        ...rows,
+      ].join('\n')
+    }
+  }
+}
+
+const token = (i: number) => `\u0000structura-att:${i}\u0000`
+// Older imports wrap each placeholder in its own fence lines directly around it; drop those too.
+const TOKEN_RE = /(?:```\n)?\u0000structura-att:(\d+)\u0000(?:\n```)?/g
+
+/** An answer as Markdown: placeholders and markers removed, attachments written in their place. */
+export function answerMarkdown(page: ExportPage): string {
+  const attachments = page.attachments ?? []
+  const byLine = new Map<number, number[]>()
+  attachments.forEach((a, i) => byLine.set(a.line, [...(byLine.get(a.line) ?? []), i]))
+  const lines = page.answer.split('\n').map((line, i) => {
+    const ids = byLine.get(i)
+    if (ids) return ids.map(token).join('\n\n')
+    return ATTACHMENT_MARKER_RE.test(line.trim()) ? '' : line
+  })
+  // Strip first so collapsing blank lines never touches file contents inserted afterwards.
+  return stripUnsupportedBlocks(lines.join('\n'))
+    .replace(TOKEN_RE, (_, i: string) => attachmentMarkdown(attachments[Number(i)]))
+}
 
 // ── Normalized export input ───────────────────────────────────────────────────
 
 export interface ExportPage {
   question: string
   answer: string
+  attachments?: Attachment[]
 }
 
 export interface ExportSticker {
@@ -103,7 +156,7 @@ export function renderMarkdown(input: ExportInput): string {
     book.pages.forEach((page, pageIndex) => {
       lines.push(`## ${page.question}`)
       lines.push('')
-      lines.push(page.answer)
+      lines.push(answerMarkdown(page))
       lines.push('')
       const pageComments = (book.comments ?? [])
         .filter(c => c.pageIndex === pageIndex)

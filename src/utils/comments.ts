@@ -1,4 +1,6 @@
 import type { Comment } from '../types'
+import { UNSUPPORTED_BLOCK_PLACEHOLDER } from '../adapters/claudeExport'
+import { ATTACHMENT_MARKER_RE } from '../adapters/claudeAttachments'
 
 // ── Line → block mapping ──────────────────────────────────────────────────────
 
@@ -12,9 +14,16 @@ export interface Block {
   inline: boolean
 }
 
+/** Lines never shown as text: code fences, the placeholder older Claude imports stored for tool
+ *  blocks, and attachment markers (attachments render in their place). */
+export function isHiddenLine(line: string): boolean {
+  const t = line.trim()
+  return line.startsWith('```') || t === UNSUPPORTED_BLOCK_PLACEHOLDER || ATTACHMENT_MARKER_RE.test(t)
+}
+
 /** How one source line of an answer is displayed; null for lines that render as nothing or a gap. */
 export function blockForLine(line: string): Block | null {
-  if (line.startsWith('```')) return null
+  if (isHiddenLine(line)) return null
   if (line.startsWith('### ')) return { tag: 'h3', content: line.slice(4), inline: false }
   if (line.startsWith('## ')) return { tag: 'h2', content: line.slice(3), inline: false }
   if (line.startsWith('# ')) return { tag: 'h2', content: line.slice(2), inline: false }

@@ -1,15 +1,17 @@
+import type { Page } from '../types'
+
 export interface ParsedConversation {
   id: string
   title: string
   createdAt: number
   source: 'chatgpt' | 'claude' | 'paste' | 'deepseek'
   pages: Page[]
+  /** Claude only: pages as older Structura versions stored them, with attachments mapped onto
+   *  their placeholder lines. Used to add files and visuals to books imported before. */
+  legacyPages?: Page[]
 }
 
-export interface Page {
-  question: string
-  answer: string
-}
+export type { Page }
 
 export type AdapterInput =
   | { kind: 'file'; name: string; json: unknown }

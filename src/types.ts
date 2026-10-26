@@ -1,6 +1,37 @@
+export interface FileAttachment {
+  kind: 'file'
+  path: string
+  content: string
+  /** The file existed earlier in the conversation; this is a later version. */
+  updated: boolean
+}
+
+export interface WidgetAttachment {
+  kind: 'widget'
+  title: string
+  /** SVG or HTML written by Claude; only ever rendered inside a sandboxed iframe. */
+  code: string
+}
+
+export interface ChartAttachment {
+  kind: 'chart'
+  title: string
+  style: string
+  categories: string[]
+  series: { name: string; values: number[] }[]
+  yTitle?: string
+  yMax?: number
+}
+
+export type AttachmentData = FileAttachment | WidgetAttachment | ChartAttachment
+
+/** A file, widget or chart shown in place of answer line `line` (a hidden marker or placeholder line). */
+export type Attachment = AttachmentData & { line: number }
+
 export interface Page {
   question: string
   answer: string
+  attachments?: Attachment[]
 }
 
 export interface Sticker {

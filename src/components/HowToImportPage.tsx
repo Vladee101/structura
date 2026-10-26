@@ -56,6 +56,10 @@ export default function HowToImportPage({ onBack }: Props) {
           <h2>Notes</h2>
           <ul>
             <li>Import the ZIP file directly. Do not extract it first.</li>
+            <li>
+              Already imported your Claude chats? Import the same ZIP again to add the files,
+              charts and widgets Claude made. Your stickers and comments are kept.
+            </li>
             <li>Structura processes the archive locally in your browser.</li>
             <li>Your conversations are never uploaded to a server.</li>
             <li>Re-importing an updated export will not create duplicate books. Existing conversations are matched and updated automatically.</li>

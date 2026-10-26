@@ -1,8 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { Page, Comment } from '../types'
+import { Page, Comment, Attachment } from '../types'
 import StickerPopup from './StickerPopup'
 import CommentCard from './CommentCard'
-import { blockForLine, tokenizeBlock, highlightForLine, segmentTokens } from '../utils/comments'
+import AttachmentView from './AttachmentView'
+import { blockForLine, isHiddenLine, tokenizeBlock, highlightForLine, segmentTokens } from '../utils/comments'
 import type { Highlight, Segment } from '../utils/comments'
 
 const PencilIcon = () => (
@@ -219,19 +220,34 @@ export default function ContentPanel({
 
   const renderBody = (text: string) => {
     const visible = showComments ? comments : []
+    const attachmentsAt = new Map<number, Attachment[]>()
+    for (const a of page.attachments ?? []) attachmentsAt.set(a.line, [...(attachmentsAt.get(a.line) ?? []), a])
+    // Line indices are kept even for hidden lines, since comment anchors refer to them.
+    let gapOpen = true
     return text.split('\n').map((line, i) => {
+      const attached = attachmentsAt.get(i)
       const block = blockForLine(line)
-      if (!block) return line.startsWith('```') ? null : <br key={i} />
-      const tokens = tokenizeBlock(block)
-      const length = tokens.reduce((n, t) => n + t.text.length, 0)
-      const highlights = visible
-        .map(c => highlightForLine(c, i, length))
-        .filter((h): h is Highlight => h !== null)
-      const Tag = block.tag
+      if (!block && !attached) {
+        if (isHiddenLine(line) || gapOpen) return null
+        gapOpen = true
+        return <br key={i} />
+      }
+      gapOpen = false
+      let lineEl: React.ReactNode = null
+      if (block) {
+        const tokens = tokenizeBlock(block)
+        const length = tokens.reduce((n, t) => n + t.text.length, 0)
+        const highlights = visible
+          .map(c => highlightForLine(c, i, length))
+          .filter((h): h is Highlight => h !== null)
+        const Tag = block.tag
+        lineEl = <Tag data-line={i}>{renderSegments(segmentTokens(tokens, highlights))}</Tag>
+      }
       const cards = visible.filter(c => c.endLine === i)
       return (
         <div key={i} className="content-block">
-          <Tag data-line={i}>{renderSegments(segmentTokens(tokens, highlights))}</Tag>
+          {lineEl}
+          {attached?.map((a, j) => <AttachmentView key={j} attachment={a} />)}
           {cards.map(c => (
             <CommentCard
               key={c.id}
