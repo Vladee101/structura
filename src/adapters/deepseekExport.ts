@@ -4,15 +4,18 @@ import { pairTurns } from './chatgptExport'
 
 // ── Type guards ───────────────────────────────────────────────────────────────
 
+// Newer exports dropped `files` from messages and moved attachments into a FILE fragment.
+// SEARCH / TOOL_* / FILE fragments carry no `content`, so only `type` is required.
 interface DsFragment {
   type: string
-  content: string
+  content?: string | null
+  files?: Array<{ file_name?: unknown }>
 }
 
 interface DsMessage {
-  files: unknown[]
-  model: string
-  inserted_at: string
+  files?: unknown[]
+  model?: string
+  inserted_at?: string
   fragments: DsFragment[]
 }
 
@@ -34,19 +37,13 @@ interface DsConversation {
 function isDsFragment(v: unknown): v is DsFragment {
   if (!v || typeof v !== 'object') return false
   const f = v as Record<string, unknown>
-  return typeof f.type === 'string' && typeof f.content === 'string'
+  return typeof f.type === 'string' && (f.content == null || typeof f.content === 'string')
 }
 
 function isDsMessage(v: unknown): v is DsMessage {
   if (!v || typeof v !== 'object') return false
   const m = v as Record<string, unknown>
-  if (!Array.isArray(m.files)) return false
-  if (typeof m.model !== 'string') return false
-  if (typeof m.inserted_at !== 'string') return false
-  if (!Array.isArray(m.fragments)) return false
-  const first = (m.fragments as unknown[])[0]
-  if (first !== undefined && !isDsFragment(first)) return false
-  return true
+  return Array.isArray(m.fragments) && (m.fragments as unknown[]).every(isDsFragment)
 }
 
 function isDsNode(v: unknown): v is DsNode {
@@ -100,8 +97,16 @@ function linearize(conv: DsConversation): DsMessage[] {
 
 // ── Content extraction ────────────────────────────────────────────────────────
 
+function attachedFileNames(msg: DsMessage): string[] {
+  return msg.fragments
+    .filter(f => f.type === 'FILE')
+    .flatMap(f => f.files ?? [])
+    .map(file => (typeof file?.file_name === 'string' ? file.file_name : ''))
+    .filter(Boolean)
+}
+
 function extractTurn(msg: DsMessage): { role: 'user' | 'assistant'; text: string } | null {
-  const isUser = msg.fragments.some(f => f.type === 'REQUEST')
+  const isUser = msg.fragments.some(f => f.type === 'REQUEST' || f.type === 'FILE')
   const isAssistant = msg.fragments.some(f => f.type === 'RESPONSE')
 
   if (!isUser && !isAssistant) return null
@@ -109,12 +114,16 @@ function extractTurn(msg: DsMessage): { role: 'user' | 'assistant'; text: string
   const role: 'user' | 'assistant' = isUser ? 'user' : 'assistant'
   const keepType = isUser ? 'REQUEST' : 'RESPONSE'
 
-  const text = msg.fragments
-    .filter(f => f.type === keepType)
-    .map(f => f.content)
-    .join('\n\n')
-    .trim()
+  // Thinking, search and tool steps are skipped; only the request / final response is kept.
+  const parts = msg.fragments
+    .filter(f => f.type === keepType && typeof f.content === 'string')
+    .map(f => f.content as string)
+  if (isUser) {
+    const names = attachedFileNames(msg)
+    if (names.length > 0) parts.unshift(`Attached: ${names.join(', ')}`)
+  }
 
+  const text = parts.join('\n\n').trim()
   if (!text) return null
   return { role, text }
 }

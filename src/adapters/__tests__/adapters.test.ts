@@ -539,3 +539,43 @@ describe('Claude unsupported-block placeholders', () => {
     expect(claudeExportAdapter.parse(fileInput(conv))[0].pages[0].answer).toBe('A.')
   })
 })
+
+describe('deepseekExport — 2026 format', () => {
+  // No `files`/`model` on messages; SEARCH/TOOL/FILE fragments have content: null.
+  const node = (id: string, parent: string | null, children: string[], fragments: unknown[] | null) =>
+    ({ id, parent, children, message: fragments && { inserted_at: '2026-10-01T00:00:00+00:00', fragments } })
+  const conv = [{
+    id: 'ds-2026', title: 'New format', inserted_at: '2026-10-01T00:00:00+00:00', updated_at: '2026-10-01T00:00:00+00:00',
+    mapping: {
+      root: node('root', null, ['1'], null),
+      1: node('1', 'root', ['2'], [
+        { type: 'FILE', content: null, files: [{ file_id: 'f', file_name: 'report.pdf', file_size: 10 }] },
+        { type: 'REQUEST', content: 'Summarise this' },
+      ]),
+      2: node('2', '1', ['3'], [
+        { type: 'THINK', content: 'thinking…' },
+        { type: 'TOOL_SEARCH', content: null, results: [] },
+        { type: 'TOOL_OPEN', content: null, results: [] },
+        { type: 'RESPONSE', content: 'Here is the summary.' },
+      ]),
+      3: node('3', '2', ['4'], [{ type: 'FILE', content: null, files: [{ file_name: 'chart.png' }] }]),
+      4: node('4', '3', [], [{ type: 'SEARCH', content: null, results: [] }, { type: 'RESPONSE', content: 'Nice chart.' }]),
+    },
+  }]
+
+  it('detects and parses messages without files/model and with content-less fragments', () => {
+    expect(deepseekExportAdapter.detect(fileInput(conv))).toBe(true)
+    const [book] = deepseekExportAdapter.parse(fileInput(conv))
+    expect(book.pages).toEqual([
+      { question: 'Attached: report.pdf\n\nSummarise this', answer: 'Here is the summary.' },
+      { question: 'Attached: chart.png', answer: 'Nice chart.' },
+    ])
+  })
+})
+
+describe('parseInput', () => {
+  it('reports a recognised export that yields no conversations', () => {
+    const unreadable = [{ id: 'x', inserted_at: 'bad', mapping: { root: { message: { fragments: [{ type: 'RESPONSE' }] } } } }]
+    expect(() => parseInput(fileInput(unreadable))).toThrow(/DeepSeek export, but no conversations could be read/)
+  })
+})
