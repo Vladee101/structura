@@ -1,6 +1,6 @@
 # Structura
 
-**AI gives answers. Structura gives structure.**
+**AI gives answers. Structura gives order.**
 
 Structura turns your AI chat history into a readable library. Each conversation becomes a *book*, each prompt becomes a *chapter*, and the answers become pages you can browse, organize, and annotate — instead of an endless scroll you'll never find anything in again.
 

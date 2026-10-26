@@ -21,7 +21,7 @@ export default function MobileNotice() {
       <div className="mobile-notice-inner">
         <div className="mobile-notice-logo">
           <span className="logo-word">Structura</span>
-          <span className="logo-tagline">AI gives answers. Structura gives structure.</span>
+          <span className="logo-tagline">AI gives answers. Structura gives order.</span>
         </div>
         <p className="mobile-notice-about">
           Structura turns your AI chat exports into a searchable library of chapters and highlights.

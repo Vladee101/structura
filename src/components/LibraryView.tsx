@@ -258,7 +258,7 @@ export default function LibraryView() {
       <header className="library-header">
         <div className="library-brand">
           <span className="logo-word">Structura</span>
-          <span className="logo-tagline">AI gives answers. Structura gives structure.</span>
+          <span className="logo-tagline">AI gives answers. Structura gives order.</span>
         </div>
         <div className="library-controls">
           {books.length > 0 && (
